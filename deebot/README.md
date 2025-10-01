@@ -3,7 +3,7 @@
 Dieses ioBroker-Skript zeigt den aktuellen Status deines Deebot-Roboters in VIS und versendet passende Telegram-Nachrichten. Es erkennt automatisch den Reinigungsmodus (saugen, putzen, reinigen), meldet Fortschritt, Raumstatus, Trocknung und Ladezustand.
 
 ## 📦 Funktionen
-- VIS-Textanzeige mit Emoji-Status
+- VIS-Textanzeige 
 - Telegram-Benachrichtigungen bei Start, Reinigung, Abschluss, Trocknung, Laden
 - Raumtracking über SpotArea-ID
 - Moduserkennung über `cleaningMode`
@@ -21,11 +21,15 @@ Dieses ioBroker-Skript zeigt den aktuellen Status deines Deebot-Roboters in VIS 
 
 ## 📊 VIS-Integration
 - Textanzeige über `0_userdata.0.Deebot.VISAnzeige`
-- JSON-Objekt für strukturierte Anzeige in VIS
+- **Emoji-freier Klartext** für VIS, damit die Anzeige neutral und übersichtlich bleibt
+- JSON-Objekt für strukturierte Anzeige in VIS über `0_userdata.0.Deebot.VISAnzeigeJSON`
+
 
 ## 📤 Telegram
 - Nachrichten über `telegram.0`
+- Enthalten Emojis zur besseren Lesbarkeit (z. B. 🧼 Reinigung gestartet, 🔋 Akku voll)
 - Nur neue Nachrichten werden gesendet (Duplikate werden gefiltert)
+
 
 ## 📁 Struktur
 - `deebot-vis-telegram.js`: Hauptskript
