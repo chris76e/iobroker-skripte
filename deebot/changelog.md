@@ -1,5 +1,9 @@
 # 📦 Changelog – deebot-vis-telegram.js
 
+## 1.0.7 – 01.10.2025
+- ✅ Logik optimiert – nach Trocknung sofort normale Statusmeldung, keine doppelten Zeiten mehr
+
+
 ## 1.0.6 – 30.09.2025
 - Automatische Statusmeldung **nach Trocknung** hinzugefügt (z. B. Laden oder bereit)
 
