@@ -1,4 +1,4 @@
-// ======= Deebot VIS & Telegram Script – Version 1.0.6 (30.09.2025) =======
+// ======= Deebot VIS & Telegram Script – Version 1.0.7 =======
 // 📝 Changelog:
 // - 1.0.0: Grundfunktionen – Telegram + VIS-Text bei Start, Reinigung, Abschluss, Laden
 // - 1.0.1: Akku-Vollmeldung „Vollgetankt und einsatzbereit!“ hinzugefügt
@@ -7,6 +7,7 @@
 // - 1.0.4: Endzeit für Trocknung aus endDateTime übernommen, VIS ohne Emojis
 // - 1.0.5: Fix für doppelte Trocknungs-Zeiten → 2s Delay, nur **eine** korrekte Uhrzeit in VIS & Telegram
 // - 1.0.6: Automatische Statusmeldung **nach Trocknung** hinzugefügt (z. B. Laden oder bereit)
+// - 1.0.7: ✅ Logik optimiert – nach Trocknung sofort normale Statusmeldung, keine doppelten Zeiten mehr
 
 const DP_VIS_TEXT   = "0_userdata.0.Deebot.VISAnzeige";
 const DP_VIS_JSON   = "0_userdata.0.Deebot.VISAnzeigeJSON";
@@ -36,7 +37,6 @@ const RAUM_MAPPING = {
 
 let lastTelegramText = "";
 let lastVisText = "";
-let dryingFinishedHandled = false; // 🆕 Verhindert Doppelmeldungen nach Trocknung
 
 function getModeInfo() {
   const rawState = getState(DP_CLEANING_MODE_DP);
@@ -147,17 +147,13 @@ function updateStatus() {
 
   let visText = "";
 
-  // 🧼 Wischmop wird gereinigt
   if (statusRaw.includes("washing")) {
-    dryingFinishedHandled = false;
     const t = "Wischmop wird gerade gereinigt…";
     sendTelegramMsg(`🧼 ${t}`);
     return setVisText(t, { status: statusRaw, ziel: targetText });
   }
 
-  // 💨 Wischmop trocknet
   if (airDrying === true) {
-    dryingFinishedHandled = false;
     setTimeout(() => {
       const endTime = dryingEndRaw ? formatTime(dryingEndRaw) : "unbekannt";
       const t = `Wischmop trocknet – fertig um ${endTime} Uhr`;
@@ -167,31 +163,20 @@ function updateStatus() {
     return;
   }
 
-  // 🆕 Wenn Trocknung fertig und noch keine Abschlussmeldung → Status erneut prüfen
-  if (airDrying === false && !dryingFinishedHandled) {
-    dryingFinishedHandled = true;
-    setTimeout(updateStatus, 2000); // 2s später nochmal prüfen, was der Status ist (z. B. Laden oder bereit)
-    return;
-  }
-
-  if (battery === 100 && statusRaw.includes("charging")) {
-    visText = "Vollgetankt und einsatzbereit!";
+  // 🆕 Automatische Rückmeldung nach Trocknung – sofort auf Ladezustand prüfen
+  if (!airDrying && !statusRaw.includes("washing") && statusRaw.includes("charging")) {
+    visText = battery === 100 ? "Vollgetankt und einsatzbereit!" : "Bin an der Ladestation und tanke Energie.";
     return setVisText(visText, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
   }
 
-  if (statusRaw.includes("charging") && area === 0) {
-    visText = "Bin an der Ladestation und tanke Energie.";
-    return setVisText(visText, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
-  }
-
-  if (statusRaw.includes("cleaning") && currentRoomId !== targetId && !statusRaw.includes("washing") && !airDrying) {
+  if (statusRaw.includes("cleaning") && currentRoomId !== targetId) {
     const telegramMsg = `🚗 Der Deebot fährt jetzt los, um ${targetText} zu ${modeInfo.infinitive}.`;
-    const visMsg = `Fahre jetzt los, um ${targetText} zu ${modeInfo.infinitive}.`;
+    const visMsg = `Der Deebot fährt jetzt los, um ${targetText} zu ${modeInfo.infinitive}.`;
     sendTelegramMsg(telegramMsg);
     return setVisText(visMsg, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
   }
 
-  if (statusRaw.includes("cleaning") && currentRoomId === targetId && !statusRaw.includes("washing") && !airDrying) {
+  if (statusRaw.includes("cleaning") && currentRoomId === targetId) {
     visText = `Ich ${modeInfo.ichForm} jetzt ${currentRoomText}.`;
     return setVisText(visText, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
   }
