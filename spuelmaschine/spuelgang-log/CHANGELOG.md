@@ -1,8 +1,9 @@
-# 📜 Changelog – Spülgang-Log
+🆕 Release v1.0.1 – 02.10.2025
+✏️ Änderungen
 
-Alle Änderungen des Skripts im Überblick.
-
----
+Textausgabe bei der Statusmeldung über den letzten Spülgang verbessert.
+Uhrzeit-Angabe enthält jetzt korrekt das Wort „fertig“.
+Meldung klingt grammatikalisch natürlich und leserfreundlich.
 
 ## 🆕 Version 1.0.0 – 02.10.2025
 - 🚀 Erstveröffentlichung des Skripts  
