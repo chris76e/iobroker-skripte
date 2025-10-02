@@ -33,7 +33,7 @@ Es liest die aktuellen Zustände und Phasen aus, berechnet automatisch die Restl
 | `cloudless-homeconnect.0.<deviceId>.Status.ProgramPhase` | Aktuelle Programmlaufphase |
 | `cloudless-homeconnect.0.<deviceId>.ActiveProgram` | Aktives Programm (Programmcode) |
 
-> 🔎 Passe `<deviceId>` in deinem Skript an dein Gerät an – z. B. `011040388898000963`.
+> 🔎 Passe `<deviceId>` in deinem Skript an dein Gerät an .
 
 ---
 
@@ -74,5 +74,6 @@ Es liest die aktuellen Zustände und Phasen aus, berechnet automatisch die Restl
 ## 🧾 Changelog
 
 Siehe [`CHANGELOG.md`](./CHANGELOG.md) für alle Versionen und Änderungen.
+
 
 
