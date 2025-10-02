@@ -1,4 +1,4 @@
-// ======= Deebot VIS & Telegram Script – Version 1.0.8 (01.10.2025) =======
+// ======= Deebot VIS & Telegram Script – Version 1.0.9 (02.10.2025) =======
 // 📝 Changelog (kumulativ):
 // - 1.0.0: Grundfunktionen – Telegram + VIS-Text bei Start, Reinigung, Abschluss, Laden
 // - 1.0.1: Akku-Vollmeldung „Vollgetankt und einsatzbereit!“ hinzugefügt
@@ -9,6 +9,7 @@
 // - 1.0.6: Automatische Statusmeldung **nach Trocknung** hinzugefügt (z. B. Laden oder bereit)
 // - 1.0.7: ✅ Logik optimiert – nach Trocknung sofort normale Statusmeldung, keine doppelten Zeiten mehr
 // - 1.0.8: 🧪 Fix – VIS-Text aktualisiert sich jetzt korrekt **nach Ende der Trocknung**
+// - 1.0.9: 🔧 Fix – Telegram/VIS bei Trocknung nur einmal & erst bei gültiger Endzeit, Trigger auf "ne" optimiert
 
 const DP_VIS_TEXT   = "0_userdata.0.Deebot.VISAnzeige";
 const DP_VIS_JSON   = "0_userdata.0.Deebot.VISAnzeigeJSON";
@@ -155,14 +156,18 @@ function updateStatus() {
     return setVisText(t, { status: statusRaw, ziel: targetText });
   }
 
-  // 💨 Wischmop trocknet – mit 2s Verzögerung prüfen
+  // 💨 Wischmop trocknet – erst bei gültiger Endzeit senden, nur einmal
   if (airDrying === true) {
-    setTimeout(() => {
-      const endTime = dryingEndRaw ? formatTime(dryingEndRaw) : "unbekannt";
-      const t = `Wischmop trocknet – fertig um ${endTime} Uhr`;
+    const formattedEnd = formatTime(dryingEndRaw);
+    if (!dryingEndRaw || formattedEnd === "unbekannt") {
+      setTimeout(updateStatus, 1000);
+      return;
+    }
+    if (!lastVisText.includes("trocknet")) {
+      const t = `Wischmop trocknet – fertig um ${formattedEnd} Uhr`;
       sendTelegramMsg(`💨 ${t}`);
-      setVisText(t, { status: statusRaw, ziel: targetText, endzeit: endTime });
-    }, 2000);
+      setVisText(t, { status: statusRaw, ziel: targetText, endzeit: formattedEnd });
+    }
     return;
   }
 
@@ -228,7 +233,7 @@ on({
     DP_DRYING_END,
     DP_CLEANING_MODE_DP
   ],
-  change: "any"
+  change: "ne" // ✅ nur bei echten Änderungen auslösen
 }, updateStatus);
 
 log(`🔁 Skriptstart: Aktueller Status = ${getState(DP_DEVICE_STATUS).val}`);
