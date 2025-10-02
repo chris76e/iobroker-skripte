@@ -1,28 +1,9 @@
-# 📦 Changelog – deebot-vis-telegram.js
-
-## 1.0.7 – 01.10.2025
-- ✅ Logik optimiert – nach Trocknung sofort normale Statusmeldung, keine doppelten Zeiten mehr
-
-
-## 1.0.6 – 30.09.2025
-- Automatische Statusmeldung **nach Trocknung** hinzugefügt (z. B. Laden oder bereit)
-
-## 1.0.5
-- Fix für doppelte Trocknungs-Zeiten → 2s Delay, nur **eine** korrekte Uhrzeit in VIS & Telegram
-
-## 1.0.4
-- Endzeit für Trocknung aus `endDateTime` übernommen
-- VIS-Ausgabe ohne Emojis
-
-## 1.0.3
-- Nutzung von `cleaningMode` zur Moduserkennung (saugen/putzen/reinigen)
-
-## 1.0.2
-- Mop-Reinigung und Trocknung integriert
-- Telegram- und VIS-Ausgabe erweitert
-
-## 1.0.1
-- Akku-Vollmeldung „Vollgetankt und einsatzbereit!“ hinzugefügt
-
-## 1.0.0
-- Grundfunktionen: Telegram + VIS-Text bei Start, Reinigung, Abschluss, Laden
+- 1.0.8 (01.10.2025): 🧪 Fix – VIS-Status wird jetzt **nach dem Ende der Trocknung automatisch aktualisiert** (z. B. „Bin an der Ladestation“ oder „Vollgetankt und einsatzbereit“)
+- 1.0.7 (01.10.2025): ✅ Logik optimiert – nach Trocknung sofort normale Statusmeldung, keine doppelten Zeiten mehr
+- 1.0.6 (30.09.2025): 📬 Automatische Statusmeldung nach Trocknung hinzugefügt
+- 1.0.5 (30.09.2025): 🐛 Fix für doppelte Trocknungs-Zeiten → 2 s Delay, nur eine korrekte Uhrzeit
+- 1.0.4 (30.09.2025): 🕐 Endzeit für Trocknung aus `endDateTime` übernommen, VIS ohne Emojis
+- 1.0.3 (30.09.2025): 🧠 Nutzung von `cleaningMode` zur Moduserkennung (saugen/putzen/reinigen)
+- 1.0.2 (30.09.2025): 🧼 Mop-Reinigung & Trocknung integriert, Telegram + VIS erweitert
+- 1.0.1 (30.09.2025): 🔋 Akku-Vollmeldung „Vollgetankt und einsatzbereit!“ hinzugefügt
+- 1.0.0 (30.09.2025): 🚀 Grundfunktionen – Telegram + VIS-Text bei Start, Reinigung, Abschluss, Laden

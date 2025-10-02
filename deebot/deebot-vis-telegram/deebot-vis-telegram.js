@@ -1,5 +1,5 @@
-// ======= Deebot VIS & Telegram Script – Version 1.0.7 =======
-// 📝 Changelog:
+// ======= Deebot VIS & Telegram Script – Version 1.0.8 (01.10.2025) =======
+// 📝 Changelog (kumulativ):
 // - 1.0.0: Grundfunktionen – Telegram + VIS-Text bei Start, Reinigung, Abschluss, Laden
 // - 1.0.1: Akku-Vollmeldung „Vollgetankt und einsatzbereit!“ hinzugefügt
 // - 1.0.2: Mop-Reinigung und Trocknung integriert, Telegram + VIS erweitert
@@ -8,6 +8,7 @@
 // - 1.0.5: Fix für doppelte Trocknungs-Zeiten → 2s Delay, nur **eine** korrekte Uhrzeit in VIS & Telegram
 // - 1.0.6: Automatische Statusmeldung **nach Trocknung** hinzugefügt (z. B. Laden oder bereit)
 // - 1.0.7: ✅ Logik optimiert – nach Trocknung sofort normale Statusmeldung, keine doppelten Zeiten mehr
+// - 1.0.8: 🧪 Fix – VIS-Text aktualisiert sich jetzt korrekt **nach Ende der Trocknung**
 
 const DP_VIS_TEXT   = "0_userdata.0.Deebot.VISAnzeige";
 const DP_VIS_JSON   = "0_userdata.0.Deebot.VISAnzeigeJSON";
@@ -129,7 +130,7 @@ function formatTime(timestamp) {
 }
 
 function updateStatus() {
-  const statusRaw = String(getState(DP_DEVICE_STATUS)?.val || "").toLowerCase();
+  const statusRaw = String((getState(DP_DEVICE_STATUS)?.val) || "").toLowerCase();
   const modeInfo = getModeInfo();
   const area = Number(getState(DP_CLEANED_AREA)?.val || 0);
   const seconds = Number(getState(DP_CLEANED_TIME)?.val || 0);
@@ -147,12 +148,14 @@ function updateStatus() {
 
   let visText = "";
 
+  // 🧼 Wischmop wird gereinigt
   if (statusRaw.includes("washing")) {
     const t = "Wischmop wird gerade gereinigt…";
     sendTelegramMsg(`🧼 ${t}`);
     return setVisText(t, { status: statusRaw, ziel: targetText });
   }
 
+  // 💨 Wischmop trocknet – mit 2s Verzögerung prüfen
   if (airDrying === true) {
     setTimeout(() => {
       const endTime = dryingEndRaw ? formatTime(dryingEndRaw) : "unbekannt";
@@ -163,20 +166,35 @@ function updateStatus() {
     return;
   }
 
-  // 🆕 Automatische Rückmeldung nach Trocknung – sofort auf Ladezustand prüfen
-  if (!airDrying && !statusRaw.includes("washing") && statusRaw.includes("charging")) {
-    visText = battery === 100 ? "Vollgetankt und einsatzbereit!" : "Bin an der Ladestation und tanke Energie.";
+  // 🧼 Trocknung war aktiv und ist jetzt beendet → Status neu setzen
+  if (airDrying === false && lastVisText.includes("trocknet")) {
+    if (battery === 100 && statusRaw.includes("charging")) {
+      const t = "Vollgetankt und einsatzbereit!";
+      return setVisText(t, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
+    } else if (statusRaw.includes("charging")) {
+      const t = "Bin an der Ladestation und tanke Energie.";
+      return setVisText(t, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
+    }
+  }
+
+  if (battery === 100 && statusRaw.includes("charging")) {
+    visText = "Vollgetankt und einsatzbereit!";
     return setVisText(visText, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
   }
 
-  if (statusRaw.includes("cleaning") && currentRoomId !== targetId) {
+  if (statusRaw.includes("charging") && area === 0) {
+    visText = "Bin an der Ladestation und tanke Energie.";
+    return setVisText(visText, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
+  }
+
+  if (statusRaw.includes("cleaning") && currentRoomId !== targetId && !statusRaw.includes("washing") && !airDrying) {
     const telegramMsg = `🚗 Der Deebot fährt jetzt los, um ${targetText} zu ${modeInfo.infinitive}.`;
     const visMsg = `Der Deebot fährt jetzt los, um ${targetText} zu ${modeInfo.infinitive}.`;
     sendTelegramMsg(telegramMsg);
     return setVisText(visMsg, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
   }
 
-  if (statusRaw.includes("cleaning") && currentRoomId === targetId) {
+  if (statusRaw.includes("cleaning") && currentRoomId === targetId && !statusRaw.includes("washing") && !airDrying) {
     visText = `Ich ${modeInfo.ichForm} jetzt ${currentRoomText}.`;
     return setVisText(visText, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
   }
