@@ -1,14 +1,10 @@
 // ======================================================
-// Spülgang-Log – Version 1.0.0
+// Spülgang-Log – Version 1.0.1
 // ======================================================
 // 📜 CHANGELOG:
+// - 1.0.1 (02.10.2025): ✏️ Textausgabe verbessert – Meldung über letzten Spülgang nun grammatikalisch korrekt und mit „fertig“-Angabe hinter der Uhrzeit.
 // - 1.0.0 (02.10.2025): 🆕 Erstveröffentlichung – Logging aller Spülgänge mit Start-, Endzeit, Dauer und Energieverbrauch.
 
-// Dieses Skript protokolliert automatisch alle Spülgänge
-// einer Spülmaschine mit HomeConnect-Integration (Cloudless Adapter).
-// Es erstellt ein JSON-Log mit Datum, Uhrzeit, Dauer, Programmname
-// und Energieverbrauch. Zusätzlich wird eine Telegram-Nachricht versendet,
-// sobald der Spülgang beendet ist.
 
 const dpState = 'cloudless-homeconnect.0.011040388898000963.Status.OperationState';
 const dpProgramCode = 'cloudless-homeconnect.0.011040388898000963.ActiveProgram';
@@ -108,7 +104,10 @@ on({ id: dpState, change: 'ne' }, function (dp) {
         log(`✅ Spülgang beendet – Log gespeichert:\n${JSON.stringify(logObj, null, 2)}`, 'info');
 
         // 🧾 Letzter Durchgang schreiben
-        const letzterText = `Letzter Spülgang war am ${logObj.EndeUhr} am ${logObj.Ende.split(' ')[0]} fertig und hat ${logObj.Dauer} Stunden gebraucht.`;
+        const datum = logObj.Ende.split(' ')[0].split('-').reverse().join('.');
+        const [stunden, minuten] = logObj.Dauer.split(':');
+        const dauerText = `${parseInt(stunden)} Stunden und ${parseInt(minuten)} Minuten`;
+        const letzterText = `Letzter Spülgang war am ${datum} um ${logObj.EndeUhr} fertig und dauerte ${dauerText}.`;
         setState('0_userdata.0.Spülmaschiene.Daten.LetzterDurchgang', letzterText, true);
         log(`🧾 ${letzterText}`, 'info');
         sendTo("telegram.0", "send", { text: letzterText }); // 📩 Nachricht an Telegram
