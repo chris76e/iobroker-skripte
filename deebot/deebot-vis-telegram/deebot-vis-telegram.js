@@ -1,4 +1,4 @@
-// ======= Deebot VIS & Telegram Script – Version 1.0.9 (02.10.2025) =======
+// ======= Deebot VIS & Telegram Script – Version 1.1.0 (03.10.2025) =======
 // 📝 Changelog (kumulativ):
 // - 1.0.0: Grundfunktionen – Telegram + VIS-Text bei Start, Reinigung, Abschluss, Laden
 // - 1.0.1: Akku-Vollmeldung „Vollgetankt und einsatzbereit!“ hinzugefügt
@@ -10,6 +10,7 @@
 // - 1.0.7: ✅ Logik optimiert – nach Trocknung sofort normale Statusmeldung, keine doppelten Zeiten mehr
 // - 1.0.8: 🧪 Fix – VIS-Text aktualisiert sich jetzt korrekt **nach Ende der Trocknung**
 // - 1.0.9: 🔧 Fix – Telegram/VIS bei Trocknung nur einmal & erst bei gültiger Endzeit, Trigger auf "ne" optimiert
+// - 1.1.0 (03.10.2025): 🧼 Fix – Endzeit bei Trocknung wird jetzt **einmalig korrekt gespeichert** und nicht mehr überschrieben
 
 const DP_VIS_TEXT   = "0_userdata.0.Deebot.VISAnzeige";
 const DP_VIS_JSON   = "0_userdata.0.Deebot.VISAnzeigeJSON";
@@ -39,6 +40,7 @@ const RAUM_MAPPING = {
 
 let lastTelegramText = "";
 let lastVisText = "";
+let dryingEndOnce = null; // 🆕 Merker für einmalige Trocknungs-Endzeit
 
 function getModeInfo() {
   const rawState = getState(DP_CLEANING_MODE_DP);
@@ -152,27 +154,31 @@ function updateStatus() {
   // 🧼 Wischmop wird gereinigt
   if (statusRaw.includes("washing")) {
     const t = "Wischmop wird gerade gereinigt…";
+    dryingEndOnce = null; // 🆕 Reset wenn neu gestartet wird
     sendTelegramMsg(`🧼 ${t}`);
     return setVisText(t, { status: statusRaw, ziel: targetText });
   }
 
-  // 💨 Wischmop trocknet – erst bei gültiger Endzeit senden, nur einmal
+  // 💨 Wischmop trocknet – Endzeit nur einmalig setzen
   if (airDrying === true) {
-    const formattedEnd = formatTime(dryingEndRaw);
-    if (!dryingEndRaw || formattedEnd === "unbekannt") {
+    if (dryingEndOnce === null && dryingEndRaw) {
+      dryingEndOnce = formatTime(dryingEndRaw);
+    }
+    if (!dryingEndOnce || dryingEndOnce === "unbekannt") {
       setTimeout(updateStatus, 1000);
       return;
     }
     if (!lastVisText.includes("trocknet")) {
-      const t = `Wischmop trocknet – fertig um ${formattedEnd} Uhr`;
+      const t = `Wischmop trocknet – fertig um ${dryingEndOnce} Uhr`;
       sendTelegramMsg(`💨 ${t}`);
-      setVisText(t, { status: statusRaw, ziel: targetText, endzeit: formattedEnd });
+      setVisText(t, { status: statusRaw, ziel: targetText, endzeit: dryingEndOnce });
     }
     return;
   }
 
-  // 🧼 Trocknung war aktiv und ist jetzt beendet → Status neu setzen
+  // 🧼 Trocknung beendet → Status neu setzen
   if (airDrying === false && lastVisText.includes("trocknet")) {
+    dryingEndOnce = null; // 🆕 Reset nach Ende
     if (battery === 100 && statusRaw.includes("charging")) {
       const t = "Vollgetankt und einsatzbereit!";
       return setVisText(t, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
