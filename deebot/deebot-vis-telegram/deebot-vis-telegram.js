@@ -35,7 +35,10 @@ let RAUM_MAPPING = {};
 let lastTelegramText = "";
 let lastVisText = "";
 let dryingEndOnce = null;
-let prevAirDryingActive = false;
+let prevAirDryingActive = (() => {
+  const v = getState(DP_AIR_DRYING_ACTIVE)?.val;
+  return v === true || v === "true" || v === 1;
+})();
 
 // 🗺️ Raum-Mapping aus DP laden
 function loadRoomMapping() {
@@ -94,12 +97,28 @@ function getModeInfo() {
   return { modeNum, infinitive, ichForm };
 }
 
+// 🧠 Artikel-Helfer: liefert accusative-Form (den/die/das ...)
+function addArtikel(name) {
+  if (!name) return name;
+  const s = String(name).trim();
+  // Wenn bereits ein Artikel oder "vom / von " vorhanden ist, nichts ändern
+  if (/^(der |den |die |das |vom |von )/i.test(s)) return s;
+  const n = s.toLowerCase();
+  if (n.endsWith("e")) return "die " + s;   // Küche -> die Küche
+  if (n.endsWith("r")) return "den " + s;   // Flur -> den Flur
+  if (n.endsWith("m")) return "das " + s;   // Wohnzimmer -> das Wohnzimmer
+  return "den " + s; // Default fallback
+}
+
+// makeVonForm erwartet eine artikulierte Form (z.B. "den Flur") und macht "vom Flur" / "von der Küche"
 function makeVonForm(phrase) {
   if (!phrase) return phrase;
-  if (phrase.startsWith("den ")) return "vom " + phrase.replace("den ", "");
-  if (phrase.startsWith("das ")) return "vom " + phrase.replace("das ", "");
-  if (phrase.startsWith("die ")) return "von der " + phrase.replace("die ", "");
-  return "von " + phrase;
+  const p = String(phrase).trim();
+  const lower = p.toLowerCase();
+  if (lower.startsWith("den ")) return "vom " + p.substring(p.indexOf(" ") + 1);
+  if (lower.startsWith("das ")) return "vom " + p.substring(p.indexOf(" ") + 1);
+  if (lower.startsWith("die ") || lower.startsWith("der ")) return "von der " + p.substring(p.indexOf(" ") + 1);
+  return "von " + p;
 }
 
 function sendTelegramMsg(msg) {
@@ -125,13 +144,15 @@ function formatTime(timestamp) {
   return isNaN(d.getTime()) ? "unbekannt" : d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 }
 
-// 🧠 Neue Trocknungslogik
+// 🧾 Wenn airDryingActive von false -> true geht, berechne einmalig now + 120min
 on({ id: DP_AIR_DRYING_ACTIVE, change: "ne" }, (obj) => {
   const newVal = obj.state.val === true || obj.state.val === "true" || obj.state.val === 1;
   if (newVal && !prevAirDryingActive) {
     const end = new Date(Date.now() + 120 * 60 * 1000);
     dryingEndOnce = formatTime(end);
     log(`💨 Neue Trocknungs-Endzeit gesetzt: ${dryingEndOnce}`);
+    // trigger updateStatus sofort, damit Telegram/VIS schnell kommen
+    updateStatus();
   }
   prevAirDryingActive = newVal;
 });
@@ -149,8 +170,11 @@ function updateStatus() {
 
   const currentRoomId = String(getState(DP_CURRENT_ROOM_ID)?.val || "");
   const targetId = String(getState(DP_TARGET)?.val || "");
-  const targetText = RAUM_MAPPING[targetId] || `Raum ${targetId}`;
-  const currentRoomText = RAUM_MAPPING[currentRoomId] || "einen Raum";
+  // -- WICHTIG: Artikel hier anwenden (accusative), Fallback ebenfalls artikuliert
+  const rawTargetName = RAUM_MAPPING[targetId];
+  const targetText = rawTargetName ? addArtikel(rawTargetName) : `den Raum ${targetId}`;
+  const rawCurrentName = RAUM_MAPPING[currentRoomId];
+  const currentRoomText = rawCurrentName ? addArtikel(rawCurrentName) : "einen Raum";
 
   let visText = "";
 
@@ -165,6 +189,7 @@ function updateStatus() {
   // 💨 Wischmop trocknet
   if (airDrying === true) {
     if (!dryingEndOnce) {
+      // falls Endzeit noch nicht gesetzt wurde: kurz warten / retry
       setTimeout(updateStatus, 1000);
       return;
     }
@@ -199,6 +224,7 @@ function updateStatus() {
   }
 
   if (statusRaw.includes("cleaning") && currentRoomId !== targetId && !statusRaw.includes("washing") && !airDrying) {
+    // hier brauchen wir accusative -> targetText ist bereits mit Artikel (z.B. "den Flur")
     const telegramMsg = `🚗 Der Deebot fährt jetzt los, um ${targetText} zu ${modeInfo.infinitive}.`;
     const visMsg = `Der Deebot fährt jetzt los, um ${targetText} zu ${modeInfo.infinitive}.`;
     sendTelegramMsg(telegramMsg);
@@ -206,11 +232,13 @@ function updateStatus() {
   }
 
   if (statusRaw.includes("cleaning") && currentRoomId === targetId && !statusRaw.includes("washing") && !airDrying) {
+    // "Ich sauge/putze/reinige jetzt <die Küche>" -> currentRoomText ist ebenfalls mit Artikel
     visText = `Ich ${modeInfo.ichForm} jetzt ${currentRoomText}.`;
     return setVisText(visText, { status: statusRaw, ziel: targetText, aktuellerRaum: currentRoomText });
   }
 
   if (statusRaw.includes("returning")) {
+    // makeVonForm erwartet bereits artikulierten targetText (z.B. "den Flur")
     const korrektTargets = makeVonForm(targetText);
     const telegramMsg = `✅ Reinigung ${korrektTargets} abgeschlossen\n📏 Fläche: ${area} m²\n⏱️ Dauer: ${dauer}\nIch fahre jetzt zur Ladestation`;
     const visMsg = `Reinigung ${korrektTargets} abgeschlossen`;
