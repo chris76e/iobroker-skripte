@@ -1,4 +1,4 @@
-// ======= Deebot VIS & Telegram Script – Version 1.1.1 (03.10.2025) =======
+// ======= Deebot VIS & Telegram Script – Version 1.1.2 (03.10.2025) =======
 // 📝 Changelog (kumulativ):
 // - 1.0.0: Grundfunktionen – Telegram + VIS-Text bei Start, Reinigung, Abschluss, Laden
 // - 1.0.1: Akku-Vollmeldung „Vollgetankt und einsatzbereit!“ hinzugefügt
@@ -12,6 +12,7 @@
 // - 1.0.9: 🔧 Fix – Telegram/VIS bei Trocknung nur einmal & erst bei gültiger Endzeit, Trigger auf "ne" optimiert
 // - 1.1.0: 🧼 Fix – Endzeit bei Trocknung wird jetzt **einmalig korrekt gespeichert** und nicht mehr überschrieben
 // - 1.1.1: 🗺️ Raum-Mapping dynamisch aus DP + Start-Log aller Räume + Fix für „updateStatus not defined“
+// - 1.1.2: ⏱️ Neue Trocknungslogik (false→true → +120 Min) + 🧠 Artikel-/Grammatik-Automatik
 
 const DP_VIS_TEXT   = "0_userdata.0.Deebot.VISAnzeige";
 const DP_VIS_JSON   = "0_userdata.0.Deebot.VISAnzeigeJSON";
@@ -25,7 +26,7 @@ const DP_CLEANED_AREA      = "ecovacs-deebot.0.cleaninglog.current.cleanedArea";
 const DP_CLEANED_TIME      = "ecovacs-deebot.0.cleaninglog.current.cleanedSeconds";
 const DP_BATTERY           = "ecovacs-deebot.0.info.battery";
 const DP_AIR_DRYING        = "ecovacs-deebot.0.control.extended.airDrying";
-const DP_DRYING_END        = "ecovacs-deebot.0.info.extended.airDryingDateTime.endDateTime";
+const DP_AIR_DRYING_ACTIVE = "ecovacs-deebot.0.info.extended.airDryingActive";
 const DP_MAP_NAMES         = "0_userdata.0.Deebot.MapNumberName";
 
 const TELEGRAM = "telegram.0";
@@ -33,7 +34,8 @@ const TELEGRAM = "telegram.0";
 let RAUM_MAPPING = {};
 let lastTelegramText = "";
 let lastVisText = "";
-let dryingEndOnce = null; // 🆕 Merker für einmalige Trocknungs-Endzeit
+let dryingEndOnce = null;
+let prevAirDryingActive = false;
 
 // 🗺️ Raum-Mapping aus DP laden
 function loadRoomMapping() {
@@ -119,26 +121,20 @@ function setVisText(text, json) {
 
 function formatTime(timestamp) {
   if (!timestamp) return "unbekannt";
-  if (typeof timestamp === "string" && timestamp.includes("T")) {
-    const d = new Date(timestamp);
-    if (!isNaN(d.getTime())) return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-  }
-  if (typeof timestamp === "string" && timestamp.includes(".")) {
-    try {
-      const parts = timestamp.split(" ");
-      const [tag, monat, jahr] = parts[0].split(".");
-      const [stunden, minuten] = parts[1].split(":");
-      const date = new Date(jahr, monat - 1, tag, stunden, minuten);
-      if (!isNaN(date.getTime())) return date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-    } catch (e) {}
-  }
-  if (!isNaN(Number(timestamp))) {
-    const num = Number(timestamp);
-    const date = new Date(num < 1e12 ? num * 1000 : num);
-    if (!isNaN(date.getTime())) return date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-  }
-  return "unbekannt";
+  const d = new Date(timestamp);
+  return isNaN(d.getTime()) ? "unbekannt" : d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 }
+
+// 🧠 Neue Trocknungslogik
+on({ id: DP_AIR_DRYING_ACTIVE, change: "ne" }, (obj) => {
+  const newVal = obj.state.val === true || obj.state.val === "true" || obj.state.val === 1;
+  if (newVal && !prevAirDryingActive) {
+    const end = new Date(Date.now() + 120 * 60 * 1000);
+    dryingEndOnce = formatTime(end);
+    log(`💨 Neue Trocknungs-Endzeit gesetzt: ${dryingEndOnce}`);
+  }
+  prevAirDryingActive = newVal;
+});
 
 function updateStatus() {
   const statusRaw = String((getState(DP_DEVICE_STATUS)?.val) || "").toLowerCase();
@@ -150,7 +146,6 @@ function updateStatus() {
 
   const airDryingVal = getState(DP_AIR_DRYING)?.val;
   const airDrying = airDryingVal === true || airDryingVal === "true" || airDryingVal === 1;
-  const dryingEndRaw = getState(DP_DRYING_END)?.val;
 
   const currentRoomId = String(getState(DP_CURRENT_ROOM_ID)?.val || "");
   const targetId = String(getState(DP_TARGET)?.val || "");
@@ -167,12 +162,9 @@ function updateStatus() {
     return setVisText(t, { status: statusRaw, ziel: targetText });
   }
 
-  // 💨 Wischmop trocknet – Endzeit nur einmalig setzen
+  // 💨 Wischmop trocknet
   if (airDrying === true) {
-    if (dryingEndOnce === null && dryingEndRaw) {
-      dryingEndOnce = formatTime(dryingEndRaw);
-    }
-    if (!dryingEndOnce || dryingEndOnce === "unbekannt") {
+    if (!dryingEndOnce) {
       setTimeout(updateStatus, 1000);
       return;
     }
@@ -184,7 +176,7 @@ function updateStatus() {
     return;
   }
 
-  // 🧼 Trocknung beendet → Status neu setzen
+  // 🧼 Trocknung beendet
   if (airDrying === false && lastVisText.includes("trocknet")) {
     dryingEndOnce = null;
     if (battery === 100 && statusRaw.includes("charging")) {
@@ -247,7 +239,6 @@ on({
     DP_CLEANED_TIME,
     DP_BATTERY,
     DP_AIR_DRYING,
-    DP_DRYING_END,
     DP_CLEANING_MODE_DP
   ],
   change: "ne"
