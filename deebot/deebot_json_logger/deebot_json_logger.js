@@ -1,27 +1,27 @@
-/*
- * Script: deebot_json_logger.js
- * Version: 1.0.0
- * Date: 04.10.2025
- * 
- * 📜 CHANGELOG:
- * - 1.0.0 (04.10.2025): 🎉 Erstveröffentlichung – Reinigungsüberwachung mit Zeitmessung, JSON-Logging, Statusaktualisierung und korrekt ausgelesenem CleaningMode.
- */
+/***************************************************************
+ * Script: Deebot JSON Logger
+ * Version: 1.0.2 (04.10.2025)
+ *
+ * 📄 CHANGELOG:
+ * - 1.0.0 (04.10.2025): 🆕 Erstes Release – JSON-Logger mit Zeitmessung
+ * - 1.0.1 (04.10.2025): ✅ CleaningMode-Übersetzung auf Stringwerte angepasst
+ * - 1.0.2 (04.10.2025): 🛠️ CleaningMode-Übersetzung robuster – unterstützt nun Zahl- und Stringwerte
+ *
+ * Beschreibung:
+ * Dieses Skript überwacht Reinigungsdurchläufe des Deebot,
+ * misst die Gesamtdauer und schreibt alle relevanten Daten als JSON
+ * in 0_userdata.0.Deebot.JSON sowie einzelne Datenpunkte für die letzte Reinigung.
+ ***************************************************************/
 
-// ===============================
 // Variablen für die Zeitmessung
-// ===============================
 var cleaningStartTime = null;
 
-// ===============================
-// Hauptfunktion: JSON überwachen und speichern
-// ===============================
+// Funktion zum Überwachen von Änderungen im JSON und Speichern in 0_userdata
 function monitorAndSaveJson() {
-
-    // Überwache Änderungen im JSON-Datenpunkt (wenn neuer Reinigungseintrag geschrieben wird)
+    // Überwache Änderungen im JSON-Datenpunkt
     on({ id: "ecovacs-deebot.0.cleaninglog.last20Logs", change: "ne", ack: true }, function (obj) {
-        // Überprüfe, ob die Zeitmessung läuft        
         if (cleaningStartTime !== null) {
-            // Beende die Zeitmessung nach kleiner Verzögerung (um alle Daten zu haben)
+            // Beende die Zeitmessung
             setTimeout(function() {
                 var cleaningEndTime = new Date();
                 var totalCleaningTimeInSeconds = (cleaningEndTime - cleaningStartTime) / 1000;
@@ -30,26 +30,25 @@ function monitorAndSaveJson() {
                 // Lese die aktuellen Daten aus dem JSON-Datenpunkt
                 getState("0_userdata.0.Deebot.JSON", function (err, state) {
                     if (!err && state) {
-                        var currentJson = state.val ? JSON.parse(state.val) : []; // Aktuelles JSON oder leeres Array
+                        var currentJson = state.val ? JSON.parse(state.val) : []; 
 
-                        // Lese alle relevanten Datenpunkte aus
+                        // Lese die Datenpunkte
                         var spotAreaName = getState("ecovacs-deebot.0.map.lastCleanedSpotArea.spotAreaName").val || "";
                         var lastTimeStamp = getState("ecovacs-deebot.0.cleaninglog.lastCleaningTimestamp").val || "";
                         var lastCleaningDate = getState("ecovacs-deebot.0.cleaninglog.lastCleaningDate").val || "";
                         lastCleaningDate = removeTimeFromDate(lastCleaningDate); 
                         var lastSquareMeters = getState("ecovacs-deebot.0.cleaninglog.lastSquareMeters").val || "";
-                        var lastTotalSeconds = getState("ecovacs-deebot.0.map.lastCleanedSpotArea.totalSeconds").val || "";
+                        var lastTotalSeconds = getState("ecovacs-deebot.0.map.lastCleanedSpotArea.totalSeconds").val || ""; 
+                        
+                        var cleaningModeRaw = getState("ecovacs-deebot.0.control.extended.cleaningMode").val || "";
+                        log("📊 CleaningMode RAW: " + cleaningModeRaw, "info");
+                        var cleaningMode = translateCleaningMode(cleaningModeRaw); 
 
-                        // ✅ FIX: CleaningMode direkt aus dem Adapter lesen
-                        var cleaningMode = getState("ecovacs-deebot.0.control.extended.cleaningMode").val || "";
-                        cleaningMode = translateCleaningMode(cleaningMode);
-
-                        // Effizienz (Mopping-Mode) ermitteln und übersetzen
                         var Moppingmode = getState("ecovacs-deebot.0.info.extended.moppingMode").val || "";
                         if (Moppingmode == 'deep') Moppingmode = 'tief';
                         else if (Moppingmode == 'fast') Moppingmode = 'schnell';
 
-                        // Neues Objekt erstellen
+                        // Neues Objekt für JSON
                         var newData = {
                             "Raum": spotAreaName,
                             "Datum": lastCleaningDate,
@@ -63,17 +62,17 @@ function monitorAndSaveJson() {
                             "Endzeit": formatTimeComponents(new Date(cleaningEndTime))
                         };
 
-                        // Neues Objekt vorne anfügen
+                        // Neues Objekt hinzufügen
                         currentJson.unshift(newData);
 
-                        // Speichern in 0_userdata
+                        // JSON speichern
                         setState("0_userdata.0.Deebot.JSON", JSON.stringify(currentJson), function () {
                             log("✅ JSON erfolgreich aktualisiert und gespeichert.", "info");
                             
                             // Zeitmessung zurücksetzen
                             cleaningStartTime = null;
 
-                            // Zusätzliche Datenpunkte aktualisieren
+                            // Zusätzliche Datenpunkte setzen
                             setState("0_userdata.0.Deebot.lastCleaning.Dauer", formatTime(lastTotalSeconds));
                             setState("0_userdata.0.Deebot.lastCleaning.Fläche", lastSquareMeters);
                             setState("0_userdata.0.Deebot.lastCleaning.Gesamtdauer", totalCleaningTimeFormatted);
@@ -85,11 +84,11 @@ function monitorAndSaveJson() {
                         log("❌ Fehler beim Lesen des Datenpunkts 0_userdata.0.Deebot.JSON", "error");
                     }
                 });
-            }, 2000); // 2-Sekunden-Verzögerung
+            }, 2000); 
         }
     });
 
-    // Startzeit setzen, wenn Reinigung startet (Spot-Bereich geändert)
+    // Startzeit setzen, wenn Reinigung startet
     on({ id: "ecovacs-deebot.0.map.currentUsedSpotAreas", change: "ne", ack: true }, function (obj) {
         if (cleaningStartTime === null) {
             cleaningStartTime = new Date();
@@ -98,52 +97,66 @@ function monitorAndSaveJson() {
     });
 }
 
-// ===============================
-// Starte die Überwachung
-// ===============================
+// Überwachung starten
 monitorAndSaveJson();
 
-// ===============================
-// Hilfsfunktionen
-// ===============================
+/***************************************************************
+ * Hilfsfunktionen
+ ***************************************************************/
+
+// Zeitformatierung m:s
 function formatTime(totalSeconds) {
     var minutes = Math.floor(totalSeconds / 60);
     var seconds = Math.floor(totalSeconds % 60);
-    var minutesString = minutes < 10 ? "0" + minutes : minutes.toString();
-    var secondsString = seconds < 10 ? "0" + seconds : seconds.toString();
-    return minutesString + ":" + secondsString;
+    return (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds);
 }
 
+// Formatierung Start-/Endzeit
 function formatTimeComponents(date) {
     var hours = pad(date.getHours(), 2);
     var minutes = pad(date.getMinutes(), 2);
     return hours + ":" + minutes;
 }
 
+// Entfernt Uhrzeit aus Datum
 function removeTimeFromDate(dateString) {
     var parts = dateString.split(" ");
     return parts[0];
 }
 
+// Zahlen mit führenden Nullen
 function pad(num, size) {
     var s = num.toString();
     while (s.length < size) s = "0" + s;
     return s;
 }
 
+// CleaningMode-Übersetzer (robust für Zahl & String)
 function translateCleaningMode(mode) {
-    mode = +mode;
-    var cleaningModes = {
-        0: "saugen und wischen",
-        1: "saugen",
-        2: "wischen",
-        3: "wischen nach saugen"
-    };
-    var translatedMode = cleaningModes[mode] || "unbekannt";
+    if (mode === null || mode === undefined) return "unbekannt";
 
-    log("ℹ️ Ursprünglicher Reinigungsmodus: " + mode, "info");
-    log("✅ Übersetzter Reinigungsmodus: " + translatedMode, "info");
+    // Zahl → Übersetzen
+    if (typeof mode === "number") {
+        switch (mode) {
+            case 0: return "saugen und wischen";
+            case 1: return "saugen";
+            case 2: return "wischen";
+            case 3: return "wischen nach saugen";
+            default: return "unbekannt";
+        }
+    }
 
-    return translatedMode;
+    // String → Übersetzen
+    if (typeof mode === "string") {
+        mode = mode.toLowerCase();
+        switch (mode) {
+            case "vacuum and mop": return "saugen und wischen";
+            case "vacuum only": return "saugen";
+            case "mop only": return "wischen";
+            case "mop after vacuum": return "wischen nach saugen";
+            default: return "unbekannt";
+        }
+    }
+
+    return "unbekannt";
 }
-
